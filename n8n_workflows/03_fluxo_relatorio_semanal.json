@@ -1,0 +1,291 @@
+{
+  "name": "Buildesign - Relatório Semanal",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0,
+              "triggerAtDay": 1
+            }
+          ]
+        }
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000001",
+      "name": "Cron Segunda 8h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) as total_leads, COUNT(*) FILTER (WHERE data_cadastro >= NOW() - INTERVAL '7 days') as novos_semana, COUNT(*) FILTER (WHERE categoria = 'MUITO_QUENTE') as muito_quentes, COUNT(*) FILTER (WHERE categoria = 'QUENTE') as quentes, COUNT(*) FILTER (WHERE categoria = 'MORNO') as mornos, COUNT(*) FILTER (WHERE categoria = 'FRIO') as frios, COUNT(*) FILTER (WHERE status = 'CONVERTIDO') as convertidos, COUNT(*) FILTER (WHERE status = 'PERDIDO') as perdidos, COUNT(*) FILTER (WHERE status = 'REUNIAO_AGENDADA') as com_reuniao, COUNT(*) FILTER (WHERE status = 'FOLLOW_UP' OR status = 'FOLLOW_UP_FINAL') as em_followup, COUNT(*) FILTER (WHERE data_ultimo_contato >= NOW() - INTERVAL '7 days') as ativos_semana FROM leads;",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000002",
+      "name": "Estatísticas Gerais",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.nome, l.whatsapp, l.categoria, l.interesses, l.data_cadastro, l.data_ultimo_contato, l.historico_resumo, (SELECT COUNT(*) FROM conversas c WHERE c.lead_id = l.id) as total_mensagens, (SELECT COUNT(*) FROM reunioes r WHERE r.lead_id = l.id) as total_reunioes FROM leads l WHERE l.data_cadastro >= NOW() - INTERVAL '7 days' OR l.data_ultimo_contato >= NOW() - INTERVAL '7 days' ORDER BY CASE l.categoria WHEN 'MUITO_QUENTE' THEN 1 WHEN 'QUENTE' THEN 2 WHEN 'MORNO' THEN 3 WHEN 'FRIO' THEN 4 ELSE 5 END, l.data_ultimo_contato DESC LIMIT 30;",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Leads Ativos Semana",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) as total_reunioes_semana, COUNT(*) FILTER (WHERE status = 'realizada') as realizadas, COUNT(*) FILTER (WHERE status = 'agendada') as pendentes, COUNT(*) FILTER (WHERE status = 'cancelada') as canceladas FROM reunioes WHERE data_hora >= NOW() - INTERVAL '7 days' OR (data_hora >= NOW() AND data_hora <= NOW() + INTERVAL '7 days');",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000004",
+      "name": "Estatísticas Reuniões",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 550],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Montar dados para o GPT gerar relatório\nconst stats = $('Estatísticas Gerais').first().json;\nconst leadsAtivos = $('Leads Ativos Semana').all().map(i => i.json);\nconst reunioes = $('Estatísticas Reuniões').first().json;\n\nlet leadsDetalhe = '';\nif (leadsAtivos && leadsAtivos.length > 0 && leadsAtivos[0].nome) {\n  leadsDetalhe = leadsAtivos.map(l => {\n    return `- ${l.nome} (${l.whatsapp}) | Cat: ${l.categoria || 'N/A'} | Interesses: ${l.interesses || 'N/A'} | Msgs: ${l.total_mensagens} | Resumo: ${l.historico_resumo || 'Sem resumo'}`;\n  }).join('\\n');\n} else {\n  leadsDetalhe = 'Nenhum lead ativo esta semana.';\n}\n\nreturn [{\n  json: {\n    promptRelatorio: `Gere um relatório semanal profissional e detalhado da Buildesign para o dono da agência.\n\nDADOS DA SEMANA:\n\n📊 VISÃO GERAL:\n- Total de leads no banco: ${stats.total_leads || 0}\n- Novos leads esta semana: ${stats.novos_semana || 0}\n- Leads ativos esta semana: ${stats.ativos_semana || 0}\n\n🌡️ CLASSIFICAÇÃO:\n- Muito Quentes: ${stats.muito_quentes || 0}\n- Quentes: ${stats.quentes || 0}\n- Mornos: ${stats.mornos || 0}\n- Frios: ${stats.frios || 0}\n\n📈 STATUS:\n- Convertidos: ${stats.convertidos || 0}\n- Com reunião agendada: ${stats.com_reuniao || 0}\n- Em follow-up: ${stats.em_followup || 0}\n- Perdidos: ${stats.perdidos || 0}\n\n📅 REUNIÕES:\n- Total semana: ${reunioes.total_reunioes_semana || 0}\n- Realizadas: ${reunioes.realizadas || 0}\n- Pendentes: ${reunioes.pendentes || 0}\n- Canceladas: ${reunioes.canceladas || 0}\n\n👥 LEADS ATIVOS DETALHADOS:\n${leadsDetalhe}\n\nIMPORTANTE: Formate como mensagem de WhatsApp (use emojis, quebras de linha, seja visual). Inclua:\n1. Resumo executivo (2-3 linhas)\n2. Números da semana\n3. Destaque dos leads mais quentes (com recomendação de ação)\n4. Análise de tendência\n5. Sugestões de ação para a próxima semana\n\nResponda APENAS com o texto do relatório, pronto para enviar no WhatsApp.`\n  }\n}];"
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000005",
+      "name": "Montar Dados Relatório",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000, messages: [{ role: 'system', content: 'Você é um analista de negócios da Buildesign, agência de desenvolvimento de sites. Gere relatórios claros, visuais e acionáveis para o dono da agência. Use emojis e formatação para WhatsApp.' }, { role: 'user', content: $json.promptRelatorio }] }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000006",
+      "name": "GPT Gerar Relatório",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst relatorio = response.choices[0].message.content;\n\nreturn [{ json: { relatorio } }];"
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000007",
+      "name": "Extrair Relatório",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT valor FROM configuracoes WHERE chave = 'whatsapp_dono' LIMIT 1;",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000008",
+      "name": "Buscar WhatsApp Dono",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1250, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.valor, text: $('Extrair Relatório').first().json.relatorio }) }}",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000009",
+      "name": "Enviar Relatório WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 400]
+    }
+  ],
+  "connections": {
+    "Cron Segunda 8h": {
+      "main": [
+        [
+          {
+            "node": "Estatísticas Gerais",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Leads Ativos Semana",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Estatísticas Reuniões",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estatísticas Gerais": {
+      "main": [
+        [
+          {
+            "node": "Montar Dados Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads Ativos Semana": {
+      "main": [
+        [
+          {
+            "node": "Montar Dados Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estatísticas Reuniões": {
+      "main": [
+        [
+          {
+            "node": "Montar Dados Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Dados Relatório": {
+      "main": [
+        [
+          {
+            "node": "GPT Gerar Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT Gerar Relatório": {
+      "main": [
+        [
+          {
+            "node": "Extrair Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Relatório": {
+      "main": [
+        [
+          {
+            "node": "Buscar WhatsApp Dono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar WhatsApp Dono": {
+      "main": [
+        [
+          {
+            "node": "Enviar Relatório WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "buildesign-relatorio-v1",
+  "meta": {
+    "instanceId": "buildesign"
+  },
+  "tags": [
+    {
+      "name": "Buildesign",
+      "id": "1"
+    }
+  ]
+}

@@ -1,0 +1,852 @@
+{
+  "name": "Buildesign - Fluxo Principal WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "buildesign-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook Evolution API",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "buildesign-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000002",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [250, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrair dados da mensagem da Evolution API\nconst body = $input.first().json.body || $input.first().json;\n\n// Suporte para formato Evolution API v2\nconst data = body.data || body;\nconst event = body.event || '';\n\n// Ignorar mensagens enviadas pelo próprio bot\nif (event === 'messages.upsert' && data.key && data.key.fromMe === true) {\n  return [];\n}\n\n// Ignorar status/stories\nif (data.key && data.key.remoteJid && data.key.remoteJid.endsWith('@g.us')) {\n  return []; // Ignorar grupos\n}\nif (data.key && data.key.remoteJid && data.key.remoteJid.endsWith('@broadcast')) {\n  return [];\n}\n\nconst remoteJid = data.key?.remoteJid || '';\nconst whatsapp = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');\nconst pushName = data.pushName || '';\n\nlet messageType = 'texto';\nlet messageContent = '';\nlet audioUrl = '';\nlet hasUrl = false;\nlet extractedUrl = '';\n\n// Detectar tipo de mensagem\nconst msg = data.message || {};\n\nif (msg.conversation) {\n  messageContent = msg.conversation;\n} else if (msg.extendedTextMessage?.text) {\n  messageContent = msg.extendedTextMessage.text;\n} else if (msg.audioMessage) {\n  messageType = 'audio';\n  audioUrl = msg.audioMessage.url || data.mediaUrl || '';\n  // Se não tiver URL direta, usar base64\n  if (!audioUrl && data.base64) {\n    audioUrl = 'base64:' + data.base64;\n  }\n} else if (msg.imageMessage?.caption) {\n  messageContent = msg.imageMessage.caption;\n} else if (msg.videoMessage?.caption) {\n  messageContent = msg.videoMessage.caption;\n} else if (msg.documentMessage) {\n  messageContent = '[Documento enviado]';\n} else if (msg.stickerMessage) {\n  messageContent = '[Sticker]';\n} else {\n  messageContent = '[Mensagem não suportada]';\n}\n\n// Detectar URLs no texto\nif (messageType === 'texto' && messageContent) {\n  const urlRegex = /(https?:\\/\\/[^\\s]+)|(www\\.[^\\s]+)|([a-zA-Z0-9-]+\\.(com|com\\.br|net|org|io|dev|site|online|store|app|tech|digital|design|agency|pro|biz|info)(\\.[a-z]{2})?(\\/[^\\s]*)?)/gi;\n  const urls = messageContent.match(urlRegex);\n  if (urls && urls.length > 0) {\n    hasUrl = true;\n    extractedUrl = urls[0];\n    if (!extractedUrl.startsWith('http')) {\n      extractedUrl = 'https://' + extractedUrl;\n    }\n  }\n}\n\nreturn [{\n  json: {\n    whatsapp,\n    pushName,\n    messageType,\n    messageContent,\n    audioUrl,\n    hasUrl,\n    extractedUrl,\n    rawEvent: event,\n    instanceName: body.instance || '',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000003",
+      "name": "Extrair Dados da Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-texto",
+              "leftValue": "={{ $json.messageType }}",
+              "rightValue": "texto",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000004",
+      "name": "É Texto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-audio",
+              "leftValue": "={{ $json.messageType }}",
+              "rightValue": "audio",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000005",
+      "name": "É Áudio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "url": "=https://evolution-api-production-6eb4.up.railway.app/chat/getBase64FromMediaMessage/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: { key: $('Webhook Evolution API').first().json.body?.data?.key || $('Webhook Evolution API').first().json.data?.key } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000006",
+      "name": "Baixar Áudio Evolution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 500]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {
+          "language": "pt",
+          "temperature": 0
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000007",
+      "name": "Whisper Transcrição",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 500],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Unificar mensagem transcrita com texto normal\nconst items = $input.all();\nconst item = items[0].json;\n\nlet messageContent = '';\nlet transcricaoAudio = null;\n\n// Verificar se veio da transcrição\nif (item.text) {\n  messageContent = item.text;\n  transcricaoAudio = item.text;\n} else {\n  messageContent = item.messageContent || '';\n  transcricaoAudio = null;\n}\n\n// Recuperar dados originais\nconst originalData = $('Extrair Dados da Mensagem').first().json;\n\nreturn [{\n  json: {\n    ...originalData,\n    messageContent: messageContent || originalData.messageContent,\n    transcricaoAudio,\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000008",
+      "name": "Unificar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-url",
+              "leftValue": "={{ $json.hasUrl }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000009",
+      "name": "Tem URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={{ encodeURIComponent($json.extractedUrl) }}&category=PERFORMANCE&category=ACCESSIBILITY&category=BEST_PRACTICES&category=SEO&strategy=mobile&locale=pt_BR",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000010",
+      "name": "PageSpeed Insights",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Processar resultados do PageSpeed\nconst pageSpeed = $input.first().json;\nconst original = $('Unificar Mensagem').first().json;\n\nlet analise = '';\n\ntry {\n  const cats = pageSpeed.lighthouseResult?.categories || {};\n  const perf = Math.round((cats.performance?.score || 0) * 100);\n  const access = Math.round((cats.accessibility?.score || 0) * 100);\n  const bp = Math.round((cats['best-practices']?.score || 0) * 100);\n  const seo = Math.round((cats.seo?.score || 0) * 100);\n\n  const audits = pageSpeed.lighthouseResult?.audits || {};\n  const fcp = audits['first-contentful-paint']?.displayValue || 'N/A';\n  const lcp = audits['largest-contentful-paint']?.displayValue || 'N/A';\n  const cls = audits['cumulative-layout-shift']?.displayValue || 'N/A';\n  const speed = audits['speed-index']?.displayValue || 'N/A';\n  const mobile = audits['viewport']?.score === 1 ? 'Sim' : 'Não';\n\n  analise = `\\n📊 ANÁLISE DO SITE: ${original.extractedUrl}\\n`;\n  analise += `\\n🏆 PONTUAÇÕES GOOGLE PAGESPEED (Mobile):\\n`;\n  analise += `• Performance: ${perf}/100\\n`;\n  analise += `• Acessibilidade: ${access}/100\\n`;\n  analise += `• Boas Práticas: ${bp}/100\\n`;\n  analise += `• SEO: ${seo}/100\\n`;\n  analise += `\\n⚡ MÉTRICAS DE VELOCIDADE:\\n`;\n  analise += `• First Contentful Paint: ${fcp}\\n`;\n  analise += `• Largest Contentful Paint: ${lcp}\\n`;\n  analise += `• Cumulative Layout Shift: ${cls}\\n`;\n  analise += `• Speed Index: ${speed}\\n`;\n  analise += `• Responsivo (Mobile): ${mobile}\\n`;\n\n  // Problemas encontrados\n  const problems = [];\n  if (perf < 50) problems.push('Performance muito baixa');\n  if (perf >= 50 && perf < 80) problems.push('Performance pode melhorar');\n  if (access < 80) problems.push('Acessibilidade precisa de atenção');\n  if (seo < 80) problems.push('SEO precisa ser otimizado');\n  if (bp < 80) problems.push('Boas práticas não seguidas');\n  if (mobile === 'Não') problems.push('Site NÃO é responsivo');\n\n  if (problems.length > 0) {\n    analise += `\\n⚠️ PROBLEMAS IDENTIFICADOS:\\n`;\n    problems.forEach(p => analise += `• ${p}\\n`);\n  }\n} catch(e) {\n  analise = `Não foi possível analisar o site ${original.extractedUrl}. Erro: ${e.message}`;\n}\n\nreturn [{\n  json: {\n    ...original,\n    analiseSite: analise,\n    temAnaliseSite: true\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000011",
+      "name": "Processar PageSpeed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sem URL - passar direto\nconst original = $('Unificar Mensagem').first().json;\nreturn [{\n  json: {\n    ...original,\n    analiseSite: '',\n    temAnaliseSite: false\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000012",
+      "name": "Sem Análise de Site",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 500]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM leads WHERE whatsapp = '{{ $json.whatsapp }}' LIMIT 1;",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000013",
+      "name": "Buscar Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2250, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verificar se lead existe e preparar dados\nconst leadResults = $input.first().json;\nconst msgData = $('Processar PageSpeed').first()?.json || $('Sem Análise de Site').first()?.json;\n\n// Se não encontrou em nenhum, tentar pegar do último merge\nconst dados = msgData || $input.first().json;\n\nconst leadExists = Array.isArray($input.all()) && $input.first().json && $input.first().json.id;\n\nreturn [{\n  json: {\n    ...dados,\n    leadExists: leadExists,\n    leadId: leadExists ? $input.first().json.id : null,\n    leadNome: leadExists ? $input.first().json.nome : dados.pushName,\n    leadStatus: leadExists ? $input.first().json.status : 'novo',\n    leadCategoria: leadExists ? $input.first().json.categoria : null,\n    leadInteresses: leadExists ? $input.first().json.interesses : null,\n    leadHistoricoResumo: leadExists ? $input.first().json.historico_resumo : null\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000014",
+      "name": "Verificar Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2500, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-lead-exists",
+              "leftValue": "={{ $json.leadExists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000015",
+      "name": "Lead Existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2750, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO leads (nome, whatsapp, status, data_cadastro) VALUES ('{{ $json.pushName }}', '{{ $json.whatsapp }}', 'novo', NOW()) RETURNING *;",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000016",
+      "name": "Criar Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [3000, 500],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar lead_id para próximos passos\nconst prevData = $('Verificar Lead').first().json;\nlet leadId;\n\ntry {\n  // Veio do Criar Lead\n  leadId = $('Criar Lead').first().json.id;\n} catch(e) {\n  // Veio do Lead Existe (true)\n  leadId = prevData.leadId;\n}\n\nreturn [{\n  json: {\n    ...prevData,\n    leadId: leadId || prevData.leadId\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000017",
+      "name": "Definir Lead ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3250, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.mensagem, c.tipo, c.data_hora, c.transcricao_audio FROM conversas c WHERE c.lead_id = {{ $json.leadId }} ORDER BY c.data_hora DESC LIMIT 10;",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000018",
+      "name": "Buscar Histórico",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [3500, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Montar contexto completo para o GPT\nconst msgData = $('Definir Lead ID').first().json;\nconst historicoRows = $input.all().map(i => i.json);\n\n// Formatar histórico\nlet historicoFormatado = '';\nif (historicoRows && historicoRows.length > 0 && historicoRows[0].mensagem) {\n  const reversed = [...historicoRows].reverse();\n  historicoFormatado = reversed.map(h => {\n    const tipo = h.tipo === 'recebida' ? '👤 Cliente' : '🤖 Buildesign';\n    const data = new Date(h.data_hora).toLocaleString('pt-BR');\n    let msg = h.mensagem || '';\n    if (h.transcricao_audio) msg += ` [Áudio transcrito: ${h.transcricao_audio}]`;\n    return `${tipo} (${data}): ${msg}`;\n  }).join('\\n');\n} else {\n  historicoFormatado = 'Primeira interação - sem histórico anterior.';\n}\n\n// Mensagem atual\nlet mensagemAtual = msgData.messageContent || '';\nif (msgData.transcricaoAudio) {\n  mensagemAtual = `[Áudio transcrito]: ${msgData.transcricaoAudio}`;\n}\n\n// Análise de site (se houver)\nlet contextSite = '';\nif (msgData.temAnaliseSite && msgData.analiseSite) {\n  contextSite = `\\n\\n--- ANÁLISE AUTOMÁTICA DO SITE DO CLIENTE ---\\n${msgData.analiseSite}\\n--- FIM DA ANÁLISE ---`;\n}\n\nreturn [{\n  json: {\n    ...msgData,\n    historicoFormatado,\n    mensagemAtual,\n    contextSite,\n    promptContext: `\nINFORMAÇÕES DO LEAD:\n- Nome: ${msgData.leadNome || msgData.pushName || 'Desconhecido'}\n- WhatsApp: ${msgData.whatsapp}\n- Status atual: ${msgData.leadStatus || 'novo'}\n- Categoria: ${msgData.leadCategoria || 'Não classificado'}\n- Interesses: ${msgData.leadInteresses || 'Não identificados'}\n- Resumo do histórico: ${msgData.leadHistoricoResumo || 'Sem resumo anterior'}\n\nHISTÓRICO DAS ÚLTIMAS CONVERSAS:\n${historicoFormatado}\n\nMENSAGEM ATUAL DO CLIENTE:\n${mensagemAtual}\n${contextSite}`\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000019",
+      "name": "Montar Contexto GPT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3750, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gpt-4o-mini',\n  temperature: 0.7,\n  max_tokens: 1000,\n  messages: [\n    {\n      role: 'system',\n      content: `Você é a assistente virtual da **Buildesign**, uma agência especializada em desenvolvimento de sites profissionais, landing pages de alta conversão e soluções digitais completas.\n\n## SOBRE A BUILDESIGN\n- Agência focada em criar sites que VENDEM e CONVERTEM\n- Especialistas em: sites institucionais, landing pages, e-commerces, blogs, portfólios e sistemas web\n- Diferenciais: design moderno, SEO otimizado, velocidade, responsividade, suporte dedicado\n- Trabalhamos com WordPress, React, Next.js e soluções sob medida\n\n## SERVIÇOS E FAIXAS DE PREÇO (usar como referência, não revelar diretamente - dar range quando perguntado)\n- Landing Page simples: R$ 997 - R$ 1.997\n- Site institucional (até 5 páginas): R$ 1.997 - R$ 3.997\n- Site completo com blog e SEO: R$ 3.997 - R$ 6.997\n- E-commerce: R$ 4.997 - R$ 12.997\n- Sistema web personalizado: A partir de R$ 8.997\n- Manutenção mensal: R$ 297 - R$ 997/mês\n\n## SEU COMPORTAMENTO\n1. Seja ACOLHEDORA, profissional e consultiva - não robótica\n2. Use emojis com moderação (1-2 por mensagem)\n3. Chame o cliente pelo nome quando souber\n4. Faça PERGUNTAS ESTRATÉGICAS para qualificar:\n   - Qual o segmento do negócio?\n   - Já tem site? (se sim, peça o link para analisar)\n   - Qual o objetivo principal? (vendas, presença, captação de leads)\n   - Tem prazo ou urgência?\n   - Qual a faixa de investimento?\n5. NUNCA diga o preço exato sem antes entender a necessidade\n6. Quando o cliente enviar URL de site, use a análise do PageSpeed para mostrar expertise\n7. Sempre conduza para agendar uma REUNIÃO de apresentação\n\n## CLASSIFICAÇÃO DE TEMPERATURA DO LEAD\nVocê DEVE classificar cada lead após cada interação:\n- **MUITO_QUENTE**: Pediu orçamento, falou em prazo, mencionou investimento, quer reunião\n- **QUENTE**: Demonstrou interesse claro, fez perguntas sobre serviços, pediu portfólio\n- **MORNO**: Está pesquisando, fez perguntas genéricas, não demonstrou urgência\n- **FRIO**: Apenas curiosidade, sem necessidade clara, só perguntou preço sem contexto\n\n## QUANDO SUGERIR REUNIÃO\n- Quando o lead estiver QUENTE ou MUITO_QUENTE\n- Quando o lead perguntar sobre valores específicos\n- Quando o lead descrever um projeto\n- Diga algo como: \"Que tal agendarmos uma call rápida de 15 min para eu entender melhor seu projeto e montar uma proposta personalizada? 😊\"\n\n## RESPOSTAS A PERGUNTAS COMUNS\n- \"Quanto custa um site?\" → Depende do escopo! Me conta mais sobre seu projeto que te passo um range. O que você precisa no site?\n- \"Vocês fazem e-commerce?\" → Sim! Trabalhamos com as melhores plataformas. Me conta, quantos produtos pretende vender?\n- \"Quanto tempo demora?\" → Em geral 15-30 dias úteis dependendo da complexidade. Vamos conversar sobre seu projeto?\n- \"Fazem manutenção?\" → Sim, temos planos mensais que incluem atualizações, segurança e suporte. Posso te explicar melhor!\n\n## FORMATO DA RESPOSTA\nVocê DEVE responder EXATAMENTE neste formato JSON:\n{\n  \"resposta\": \"sua mensagem para o cliente aqui\",\n  \"categoria\": \"MUITO_QUENTE|QUENTE|MORNO|FRIO\",\n  \"interesses\": \"lista dos interesses identificados\",\n  \"resumo\": \"resumo breve da conversa até agora\",\n  \"sugerir_reuniao\": true/false,\n  \"intencao\": \"descrição da intenção do cliente\"\n}\n\nIMPORTANTE: Responda APENAS o JSON, sem markdown, sem código, sem explicação. Apenas o JSON puro.`\n    },\n    {\n      role: 'user',\n      content: $json.promptContext\n    }\n  ]\n}) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000020",
+      "name": "GPT-4o Mini Agente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4000, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Processar resposta do GPT\nconst gptResponse = $input.first().json;\nconst msgData = $('Montar Contexto GPT').first().json;\n\nlet resposta = '';\nlet categoria = 'MORNO';\nlet interesses = '';\nlet resumo = '';\nlet sugerirReuniao = false;\nlet intencao = '';\n\ntry {\n  const content = gptResponse.choices[0].message.content.trim();\n  \n  // Tentar parsear JSON\n  let parsed;\n  try {\n    parsed = JSON.parse(content);\n  } catch(e) {\n    // Tentar extrair JSON de dentro de markdown\n    const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      parsed = JSON.parse(jsonMatch[0]);\n    } else {\n      parsed = { resposta: content };\n    }\n  }\n  \n  resposta = parsed.resposta || content;\n  categoria = parsed.categoria || 'MORNO';\n  interesses = parsed.interesses || '';\n  resumo = parsed.resumo || '';\n  sugerirReuniao = parsed.sugerir_reuniao || false;\n  intencao = parsed.intencao || '';\n} catch(e) {\n  resposta = 'Olá! Obrigado por entrar em contato com a Buildesign. Como posso ajudar você hoje? 😊';\n}\n\nreturn [{\n  json: {\n    ...msgData,\n    respostaGPT: resposta,\n    categoria,\n    interesses,\n    resumo,\n    sugerirReuniao,\n    intencao\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000021",
+      "name": "Processar Resposta GPT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4250, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversas (lead_id, mensagem, tipo, data_hora, transcricao_audio) VALUES ({{ $json.leadId }}, '{{ $json.messageContent.replace(/'/g, \"''\") }}', 'recebida', NOW(), {{ $json.transcricaoAudio ? \"'\" + $json.transcricaoAudio.replace(/'/g, \"''\") + \"'\" : 'NULL' }});",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000022",
+      "name": "Salvar Msg Recebida",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [4500, 250],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversas (lead_id, mensagem, tipo, data_hora) VALUES ({{ $json.leadId }}, '{{ $json.respostaGPT.replace(/'/g, \"''\") }}', 'enviada', NOW());",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000023",
+      "name": "Salvar Msg Enviada",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [4500, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET status = '{{ $json.categoria }}', categoria = '{{ $json.categoria }}', data_ultimo_contato = NOW(), data_followup_3dias = NOW() + INTERVAL '3 days', data_followup_5dias = NOW() + INTERVAL '5 days', interesses = '{{ ($json.interesses || '').replace(/'/g, \"''\") }}', historico_resumo = '{{ ($json.resumo || '').replace(/'/g, \"''\") }}', nome = COALESCE(NULLIF('{{ $json.pushName }}', ''), nome) WHERE id = {{ $json.leadId }};",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000024",
+      "name": "Atualizar Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [4500, 550],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, text: $json.respostaGPT }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000025",
+      "name": "Enviar Resposta WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4750, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-reuniao",
+              "leftValue": "={{ $json.sugerirReuniao }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000026",
+      "name": "Sugeriu Reunião?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [5000, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT valor FROM configuracoes WHERE chave = 'whatsapp_dono' LIMIT 1;",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000027",
+      "name": "Buscar WhatsApp Dono",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [5250, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Buscar WhatsApp Dono').first().json.valor, text: '🔔 ALERTA LEAD QUENTE!\\n\\nNome: ' + $('Processar Resposta GPT').first().json.leadNome + '\\nWhatsApp: ' + $('Processar Resposta GPT').first().json.whatsapp + '\\nCategoria: ' + $('Processar Resposta GPT').first().json.categoria + '\\nIntenção: ' + $('Processar Resposta GPT').first().json.intencao + '\\nInteresses: ' + $('Processar Resposta GPT').first().json.interesses + '\\n\\n💡 O lead demonstrou interesse em agendar reunião!' }) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000028",
+      "name": "Notificar Dono Lead Quente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [5500, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Evolution API": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extrair Dados da Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Dados da Mensagem": {
+      "main": [
+        [
+          {
+            "node": "É Texto?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "É Áudio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Texto?": {
+      "main": [
+        [
+          {
+            "node": "Unificar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "É Áudio?": {
+      "main": [
+        [
+          {
+            "node": "Baixar Áudio Evolution",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unificar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar Áudio Evolution": {
+      "main": [
+        [
+          {
+            "node": "Whisper Transcrição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Whisper Transcrição": {
+      "main": [
+        [
+          {
+            "node": "Unificar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unificar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Tem URL?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem URL?": {
+      "main": [
+        [
+          {
+            "node": "PageSpeed Insights",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sem Análise de Site",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PageSpeed Insights": {
+      "main": [
+        [
+          {
+            "node": "Processar PageSpeed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar PageSpeed": {
+      "main": [
+        [
+          {
+            "node": "Buscar Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sem Análise de Site": {
+      "main": [
+        [
+          {
+            "node": "Buscar Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Lead": {
+      "main": [
+        [
+          {
+            "node": "Verificar Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Lead": {
+      "main": [
+        [
+          {
+            "node": "Lead Existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Existe?": {
+      "main": [
+        [
+          {
+            "node": "Definir Lead ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Criar Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Lead": {
+      "main": [
+        [
+          {
+            "node": "Definir Lead ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Definir Lead ID": {
+      "main": [
+        [
+          {
+            "node": "Buscar Histórico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Histórico": {
+      "main": [
+        [
+          {
+            "node": "Montar Contexto GPT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Contexto GPT": {
+      "main": [
+        [
+          {
+            "node": "GPT-4o Mini Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4o Mini Agente": {
+      "main": [
+        [
+          {
+            "node": "Processar Resposta GPT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Resposta GPT": {
+      "main": [
+        [
+          {
+            "node": "Salvar Msg Recebida",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Salvar Msg Enviada",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Atualizar Lead",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Enviar Resposta WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Resposta WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Sugeriu Reunião?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sugeriu Reunião?": {
+      "main": [
+        [
+          {
+            "node": "Buscar WhatsApp Dono",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Buscar WhatsApp Dono": {
+      "main": [
+        [
+          {
+            "node": "Notificar Dono Lead Quente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "buildesign-principal-v1",
+  "meta": {
+    "instanceId": "buildesign"
+  },
+  "tags": [
+    {
+      "name": "Buildesign",
+      "id": "1"
+    }
+  ]
+}

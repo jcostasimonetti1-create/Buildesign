@@ -1,0 +1,374 @@
+{
+  "name": "Buildesign - Follow-up Automático",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000001",
+      "name": "Cron 9h Diário",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.*, (SELECT c.mensagem FROM conversas c WHERE c.lead_id = l.id ORDER BY c.data_hora DESC LIMIT 1) as ultima_mensagem FROM leads l WHERE l.data_followup_3dias <= NOW() AND l.data_followup_3dias > NOW() - INTERVAL '1 day' AND l.status NOT IN ('CONVERTIDO', 'PERDIDO', 'REUNIAO_AGENDADA') AND l.data_ultimo_contato < NOW() - INTERVAL '2 days' ORDER BY l.data_ultimo_contato ASC;",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Leads Follow-up 3 Dias",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.*, (SELECT c.mensagem FROM conversas c WHERE c.lead_id = l.id ORDER BY c.data_hora DESC LIMIT 1) as ultima_mensagem FROM leads l WHERE l.data_followup_5dias <= NOW() AND l.data_followup_5dias > NOW() - INTERVAL '1 day' AND l.status NOT IN ('CONVERTIDO', 'PERDIDO', 'REUNIAO_AGENDADA') AND l.data_ultimo_contato < NOW() - INTERVAL '4 days' ORDER BY l.data_ultimo_contato ASC;",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000003",
+      "name": "Leads Follow-up 5 Dias",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 450],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gerar mensagens personalizadas para follow-up 3 dias\nconst leads = $input.all().map(i => i.json);\n\nif (!leads || leads.length === 0 || !leads[0].id) {\n  return [];\n}\n\nconst mensagens = leads.map(lead => {\n  const nome = lead.nome || 'amigo(a)';\n  const primeiroNome = nome.split(' ')[0];\n  const interesses = lead.interesses || 'desenvolvimento de site';\n  \n  // Variações de mensagem para 3 dias\n  const templates = [\n    `Oi ${primeiroNome}! 😊 Tudo bem? Sou da Buildesign e estava lembrando da nossa conversa sobre ${interesses}. Surgiu alguma dúvida? Estou por aqui para ajudar!`,\n    `Olá ${primeiroNome}! Passando para saber se conseguiu pensar sobre o projeto que conversamos. Temos uma agenda aberta essa semana para uma call rápida, caso queira avançar! 🚀`,\n    `Oi ${primeiroNome}! 👋 Vi que conversamos há uns dias sobre ${interesses}. Tem novidades sobre o projeto? Fico à disposição para tirar qualquer dúvida!`\n  ];\n  \n  const randomIndex = Math.floor(Math.random() * templates.length);\n  \n  return {\n    json: {\n      leadId: lead.id,\n      whatsapp: lead.whatsapp,\n      nome: lead.nome,\n      mensagem: templates[randomIndex],\n      tipoFollowup: '3dias'\n    }\n  };\n});\n\nreturn mensagens;"
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000004",
+      "name": "Gerar Msgs 3 Dias",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gerar mensagens apelativas para follow-up 5 dias\nconst leads = $input.all().map(i => i.json);\n\nif (!leads || leads.length === 0 || !leads[0].id) {\n  return [];\n}\n\nconst mensagens = leads.map(lead => {\n  const nome = lead.nome || 'amigo(a)';\n  const primeiroNome = nome.split(' ')[0];\n  const interesses = lead.interesses || 'seu projeto digital';\n  \n  // Mensagens mais apelativas para 5 dias\n  const templates = [\n    `${primeiroNome}, tudo bem? 😊 Olha, essa semana estamos com condições especiais para novos projetos de sites. Se ainda estiver pensando em investir na presença digital do seu negócio, posso preparar uma proposta personalizada com um desconto exclusivo. Posso te mostrar?`,\n    `Oi ${primeiroNome}! 🔥 Notícia boa: liberamos vagas limitadas com desconto para projetos iniciados esse mês. Lembrei da nossa conversa sobre ${interesses} e pensei em você. Que tal agendarmos 15 minutinhos para eu te apresentar uma proposta especial?`,\n    `${primeiroNome}, passando para avisar que estamos com a agenda abrindo para novos projetos este mês. 📅 Como sei que você tem interesse em ${interesses}, queria te oferecer prioridade na fila + uma condição especial. Topa conversar rapidinho?`\n  ];\n  \n  const randomIndex = Math.floor(Math.random() * templates.length);\n  \n  return {\n    json: {\n      leadId: lead.id,\n      whatsapp: lead.whatsapp,\n      nome: lead.nome,\n      mensagem: templates[randomIndex],\n      tipoFollowup: '5dias'\n    }\n  };\n});\n\nreturn mensagens;"
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000005",
+      "name": "Gerar Msgs 5 Dias",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 450]
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, text: $json.mensagem }) }}",
+        "options": {
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 5000
+            }
+          }
+        }
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000006",
+      "name": "Enviar Follow-up 3 Dias",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, text: $json.mensagem }) }}",
+        "options": {
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 5000
+            }
+          }
+        }
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000007",
+      "name": "Enviar Follow-up 5 Dias",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 450]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversas (lead_id, mensagem, tipo, data_hora) VALUES ({{ $json.leadId }}, '{{ $json.mensagem.replace(/'/g, \"''\") }}', 'enviada', NOW()); UPDATE leads SET data_ultimo_contato = NOW(), status = CASE WHEN status = 'novo' THEN 'FOLLOW_UP' ELSE status END WHERE id = {{ $json.leadId }};",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000008",
+      "name": "Salvar Follow-up 3d no Banco",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1000, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversas (lead_id, mensagem, tipo, data_hora) VALUES ({{ $json.leadId }}, '{{ $json.mensagem.replace(/'/g, \"''\") }}', 'enviada', NOW()); UPDATE leads SET data_ultimo_contato = NOW(), status = CASE WHEN status IN ('novo', 'FOLLOW_UP') THEN 'FOLLOW_UP_FINAL' ELSE status END WHERE id = {{ $json.leadId }};",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000009",
+      "name": "Salvar Follow-up 5d no Banco",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1000, 450],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT valor FROM configuracoes WHERE chave = 'whatsapp_dono' LIMIT 1;",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000010",
+      "name": "Buscar WhatsApp Dono",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 650],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) FILTER (WHERE data_followup_3dias <= NOW() AND data_followup_3dias > NOW() - INTERVAL '1 day' AND status NOT IN ('CONVERTIDO', 'PERDIDO', 'REUNIAO_AGENDADA')) as total_3dias, COUNT(*) FILTER (WHERE data_followup_5dias <= NOW() AND data_followup_5dias > NOW() - INTERVAL '1 day' AND status NOT IN ('CONVERTIDO', 'PERDIDO', 'REUNIAO_AGENDADA')) as total_5dias FROM leads WHERE data_ultimo_contato < NOW() - INTERVAL '2 days';",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000011",
+      "name": "Contar Follow-ups",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [500, 650],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Buscar WhatsApp Dono').first().json.valor, text: '📋 FOLLOW-UP DIÁRIO - ' + new Date().toLocaleDateString('pt-BR') + '\\n\\n📨 Follow-ups 3 dias enviados: ' + ($json.total_3dias || '0') + '\\n📨 Follow-ups 5 dias enviados: ' + ($json.total_5dias || '0') + '\\n\\nTodos os follow-ups foram enviados automaticamente! ✅' }) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000012",
+      "name": "Resumo Follow-up para Dono",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 650]
+    }
+  ],
+  "connections": {
+    "Cron 9h Diário": {
+      "main": [
+        [
+          {
+            "node": "Leads Follow-up 3 Dias",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Leads Follow-up 5 Dias",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Buscar WhatsApp Dono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads Follow-up 3 Dias": {
+      "main": [
+        [
+          {
+            "node": "Gerar Msgs 3 Dias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads Follow-up 5 Dias": {
+      "main": [
+        [
+          {
+            "node": "Gerar Msgs 5 Dias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar Msgs 3 Dias": {
+      "main": [
+        [
+          {
+            "node": "Enviar Follow-up 3 Dias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar Msgs 5 Dias": {
+      "main": [
+        [
+          {
+            "node": "Enviar Follow-up 5 Dias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Follow-up 3 Dias": {
+      "main": [
+        [
+          {
+            "node": "Salvar Follow-up 3d no Banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Follow-up 5 Dias": {
+      "main": [
+        [
+          {
+            "node": "Salvar Follow-up 5d no Banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar WhatsApp Dono": {
+      "main": [
+        [
+          {
+            "node": "Contar Follow-ups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contar Follow-ups": {
+      "main": [
+        [
+          {
+            "node": "Resumo Follow-up para Dono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "buildesign-followup-v1",
+  "meta": {
+    "instanceId": "buildesign"
+  },
+  "tags": [
+    {
+      "name": "Buildesign",
+      "id": "1"
+    }
+  ]
+}

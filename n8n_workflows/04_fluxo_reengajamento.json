@@ -1,0 +1,318 @@
+{
+  "name": "Buildesign - Reengajamento 6 Meses",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 10,
+              "triggerAtMinute": 0,
+              "triggerAtDay": 1
+            }
+          ]
+        }
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000001",
+      "name": "Cron Primeira Segunda do Mês",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.id, l.nome, l.whatsapp, l.categoria, l.interesses, l.historico_resumo, l.data_cadastro, l.data_ultimo_contato, (SELECT c.mensagem FROM conversas c WHERE c.lead_id = l.id AND c.tipo = 'recebida' ORDER BY c.data_hora DESC LIMIT 1) as ultima_msg_cliente FROM leads l WHERE l.data_ultimo_contato < NOW() - INTERVAL '6 months' AND l.status NOT IN ('CONVERTIDO', 'PERDIDO', 'BLOQUEADO') AND l.whatsapp IS NOT NULL ORDER BY l.data_ultimo_contato ASC LIMIT 20;",
+        "options": {}
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000002",
+      "name": "Buscar Leads Inativos 6M",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-has-leads",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000003",
+      "name": "Tem Leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', temperature: 0.8, max_tokens: 500, messages: [{ role: 'system', content: 'Você é a assistente da Buildesign, agência de desenvolvimento de sites. Gere uma mensagem de reengajamento personalizada para um lead antigo. A mensagem deve:\\n1. Ser calorosa e não invasiva\\n2. Mencionar algo relevante sobre o histórico do lead\\n3. Trazer uma novidade ou benefício atual\\n4. Ter no máximo 3 parágrafos curtos\\n5. Usar 1-2 emojis\\n6. Terminar com uma pergunta aberta\\n\\nResponda APENAS com o texto da mensagem, sem JSON, sem markdown.' }, { role: 'user', content: 'Gere mensagem de reengajamento para:\\n- Nome: ' + $json.nome + '\\n- Último contato: ' + ($json.data_ultimo_contato ? new Date($json.data_ultimo_contato).toLocaleDateString('pt-BR') : 'há muito tempo') + '\\n- Interesses anteriores: ' + ($json.interesses || 'desenvolvimento de site') + '\\n- Resumo anterior: ' + ($json.historico_resumo || 'Sem detalhes') + '\\n- Última mensagem: ' + ($json.ultima_msg_cliente || 'Sem registro') }] }) }}",
+        "options": {
+          "timeout": 60000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          }
+        }
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000004",
+      "name": "GPT Mensagem Personalizada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 250],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst leadData = $('Tem Leads?').first().json;\n\nconst mensagem = response.choices[0].message.content.trim();\n\nreturn [{\n  json: {\n    leadId: leadData.id,\n    whatsapp: leadData.whatsapp,\n    nome: leadData.nome,\n    mensagem\n  }\n}];"
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000005",
+      "name": "Extrair Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 250]
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, text: $json.mensagem }) }}",
+        "options": {
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 10000
+            }
+          }
+        }
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000006",
+      "name": "Enviar Reengajamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 250]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversas (lead_id, mensagem, tipo, data_hora) VALUES ({{ $json.leadId }}, '{{ $json.mensagem.replace(/'/g, \"''\") }}', 'enviada', NOW()); UPDATE leads SET data_ultimo_contato = NOW(), status = 'REENGAJAMENTO', data_followup_3dias = NOW() + INTERVAL '3 days', data_followup_5dias = NOW() + INTERVAL '5 days' WHERE id = {{ $json.leadId }};",
+        "options": {}
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000007",
+      "name": "Salvar no Banco",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1500, 250],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT valor FROM configuracoes WHERE chave = 'whatsapp_dono' LIMIT 1;",
+        "options": {}
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000008",
+      "name": "Buscar WhatsApp Dono",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1500, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.valor, text: '🔄 REENGAJAMENTO MENSAL\\n\\nForam enviadas mensagens de reengajamento para leads inativos há mais de 6 meses.\\n\\nData: ' + new Date().toLocaleDateString('pt-BR') + '\\n\\nOs leads que responderem entrarão automaticamente no fluxo de atendimento principal.' }) }}",
+        "options": {}
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000009",
+      "name": "Notificar Dono",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 400]
+    }
+  ],
+  "connections": {
+    "Cron Primeira Segunda do Mês": {
+      "main": [
+        [
+          {
+            "node": "Buscar Leads Inativos 6M",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Leads Inativos 6M": {
+      "main": [
+        [
+          {
+            "node": "Tem Leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem Leads?": {
+      "main": [
+        [
+          {
+            "node": "GPT Mensagem Personalizada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GPT Mensagem Personalizada": {
+      "main": [
+        [
+          {
+            "node": "Extrair Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Enviar Reengajamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Reengajamento": {
+      "main": [
+        [
+          {
+            "node": "Salvar no Banco",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Buscar WhatsApp Dono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar WhatsApp Dono": {
+      "main": [
+        [
+          {
+            "node": "Notificar Dono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "buildesign-reengajamento-v1",
+  "meta": {
+    "instanceId": "buildesign"
+  },
+  "tags": [
+    {
+      "name": "Buildesign",
+      "id": "1"
+    }
+  ]
+}

@@ -1,0 +1,503 @@
+{
+  "name": "Buildesign - Agendamento de Reuniões",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "buildesign-agendar",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000001",
+      "name": "Webhook Agendamento",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "buildesign-agendar"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000002",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [250, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrair dados do pedido de agendamento\n// Pode vir do fluxo principal ou direto do webhook\nconst body = $input.first().json.body || $input.first().json;\nconst data = body.data || body;\n\nconst whatsapp = data.whatsapp || data.key?.remoteJid?.replace('@s.whatsapp.net', '') || '';\nconst leadId = data.leadId || null;\nconst nome = data.nome || data.pushName || '';\nconst mensagem = data.mensagem || data.message?.conversation || '';\n\n// Detectar preferência de horário na mensagem\nlet preferencia = 'qualquer';\nconst msgLower = mensagem.toLowerCase();\nif (msgLower.includes('manhã') || msgLower.includes('manha')) preferencia = 'manha';\nelse if (msgLower.includes('tarde')) preferencia = 'tarde';\nelse if (msgLower.includes('noite')) preferencia = 'noite';\n\n// Detectar dia preferido\nlet diaPreferido = null;\nconst dias = ['segunda', 'terça', 'terca', 'quarta', 'quinta', 'sexta'];\nfor (const dia of dias) {\n  if (msgLower.includes(dia)) {\n    diaPreferido = dia;\n    break;\n  }\n}\nif (msgLower.includes('amanhã') || msgLower.includes('amanha')) diaPreferido = 'amanha';\nif (msgLower.includes('hoje')) diaPreferido = 'hoje';\n\nreturn [{\n  json: {\n    whatsapp,\n    leadId,\n    nome,\n    mensagem,\n    preferencia,\n    diaPreferido\n  }\n}];"
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000003",
+      "name": "Extrair Dados Agendamento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, nome FROM leads WHERE whatsapp = '{{ $json.whatsapp }}' LIMIT 1;",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000004",
+      "name": "Buscar Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [500, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{ new Date().toISOString() }}",
+          "timeMax": "={{ new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Google Calendar - Eventos",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [500, 500],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "google-calendar-credential",
+          "name": "Google Calendar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calcular horários disponíveis nos próximos 5 dias úteis\nconst eventosExistentes = $('Google Calendar - Eventos').all().map(i => i.json);\nconst dadosLead = $('Extrair Dados Agendamento').first().json;\nconst leadInfo = $('Buscar Lead').first().json;\n\n// Horários de trabalho: 9h-12h e 14h-18h (intervalos de 1h)\nconst horariosTrabalho = [\n  { hora: 9, label: '09:00' },\n  { hora: 10, label: '10:00' },\n  { hora: 11, label: '11:00' },\n  { hora: 14, label: '14:00' },\n  { hora: 15, label: '15:00' },\n  { hora: 16, label: '16:00' },\n  { hora: 17, label: '17:00' }\n];\n\n// Mapear eventos ocupados\nconst eventosOcupados = eventosExistentes\n  .filter(e => e.start && e.start.dateTime)\n  .map(e => ({\n    inicio: new Date(e.start.dateTime),\n    fim: new Date(e.end.dateTime)\n  }));\n\n// Gerar próximos 5 dias úteis\nconst diasDisponiveis = [];\nconst hoje = new Date();\nlet diasAdicionados = 0;\nlet diaAtual = new Date(hoje);\n\n// Se já passou das 17h, começar amanhã\nif (hoje.getHours() >= 17) {\n  diaAtual.setDate(diaAtual.getDate() + 1);\n}\n\nwhile (diasAdicionados < 5) {\n  const diaSemana = diaAtual.getDay();\n  // Pular sábado (6) e domingo (0)\n  if (diaSemana !== 0 && diaSemana !== 6) {\n    const nomeDia = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][diaSemana];\n    const dataFormatada = diaAtual.toLocaleDateString('pt-BR');\n    \n    const horariosLivres = [];\n    for (const h of horariosTrabalho) {\n      // Se é hoje, pular horários já passados\n      if (diaAtual.toDateString() === hoje.toDateString() && h.hora <= hoje.getHours()) continue;\n      \n      // Filtrar por preferência\n      if (dadosLead.preferencia === 'manha' && h.hora >= 12) continue;\n      if (dadosLead.preferencia === 'tarde' && h.hora < 14) continue;\n      \n      // Verificar se não conflita com evento existente\n      const slotInicio = new Date(diaAtual);\n      slotInicio.setHours(h.hora, 0, 0, 0);\n      const slotFim = new Date(slotInicio);\n      slotFim.setHours(h.hora + 1, 0, 0, 0);\n      \n      const conflito = eventosOcupados.some(e => \n        (slotInicio >= e.inicio && slotInicio < e.fim) ||\n        (slotFim > e.inicio && slotFim <= e.fim)\n      );\n      \n      if (!conflito) {\n        horariosLivres.push(h.label);\n      }\n    }\n    \n    if (horariosLivres.length > 0) {\n      diasDisponiveis.push({\n        data: new Date(diaAtual).toISOString().split('T')[0],\n        nomeDia,\n        dataFormatada,\n        horarios: horariosLivres\n      });\n    }\n    diasAdicionados++;\n  }\n  diaAtual.setDate(diaAtual.getDate() + 1);\n}\n\n// Montar mensagem com horários\nlet msgHorarios = `Oi ${dadosLead.nome || leadInfo.nome || 'amigo(a)'}! 😊 Ótimo que quer agendar!\\n\\nAqui estão nossos horários disponíveis:\\n\\n`;\n\ndiasDisponiveis.forEach(dia => {\n  msgHorarios += `📅 *${dia.nomeDia} - ${dia.dataFormatada}*\\n`;\n  dia.horarios.forEach(h => {\n    msgHorarios += `   ⏰ ${h}\\n`;\n  });\n  msgHorarios += '\\n';\n});\n\nmsgHorarios += `Escolha o melhor dia e horário para você e me avise! A reunião dura cerca de 15-30 minutinhos. 🚀`;\n\nreturn [{\n  json: {\n    ...dadosLead,\n    leadId: leadInfo.id || dadosLead.leadId,\n    leadNome: leadInfo.nome || dadosLead.nome,\n    diasDisponiveis,\n    msgHorarios\n  }\n}];"
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000006",
+      "name": "Calcular Horários Disponíveis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, text: $json.msgHorarios }) }}",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000007",
+      "name": "Enviar Horários Disponíveis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversas (lead_id, mensagem, tipo, data_hora) VALUES ({{ $json.leadId }}, '{{ $json.msgHorarios.replace(/'/g, \"''\") }}', 'enviada', NOW()); UPDATE leads SET status = 'AGUARDANDO_HORARIO' WHERE id = {{ $json.leadId }};",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000008",
+      "name": "Salvar Envio Horários",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1250, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "buildesign-confirmar-reuniao",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000009",
+      "name": "Webhook Confirmar Reunião",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 700],
+      "webhookId": "buildesign-confirmar-reuniao"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000010",
+      "name": "Responder Confirmação",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [250, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Processar confirmação de horário\nconst body = $input.first().json.body || $input.first().json;\nconst data = body.data || body;\n\nconst whatsapp = data.whatsapp || '';\nconst leadId = data.leadId || null;\nconst nome = data.nome || '';\nconst dataReuniao = data.dataReuniao || ''; // formato: YYYY-MM-DD\nconst horaReuniao = data.horaReuniao || ''; // formato: HH:MM\n\n// Gerar link do Google Meet\nconst meetId = 'buildesign-' + Math.random().toString(36).substring(2, 10);\n\nreturn [{\n  json: {\n    whatsapp,\n    leadId,\n    nome,\n    dataReuniao,\n    horaReuniao,\n    meetId,\n    dataHoraInicio: `${dataReuniao}T${horaReuniao}:00`,\n    dataHoraFim: `${dataReuniao}T${String(parseInt(horaReuniao.split(':')[0]) + 1).padStart(2, '0')}:${horaReuniao.split(':')[1]}:00`\n  }\n}];"
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000011",
+      "name": "Processar Confirmação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 750]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "summary": "=Reunião Buildesign - {{ $json.nome }}",
+        "start": "={{ $json.dataHoraInicio }}",
+        "end": "={{ $json.dataHoraFim }}",
+        "additionalFields": {
+          "conferenceDataVersion": 1,
+          "description": "=Reunião com lead {{ $json.nome }} (WhatsApp: {{ $json.whatsapp }})\n\nAgendado automaticamente pelo sistema Buildesign.",
+          "attendees": [],
+          "guestsCanModify": false,
+          "sendUpdates": "all"
+        }
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000012",
+      "name": "Criar Evento Google Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [500, 750],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "google-calendar-credential",
+          "name": "Google Calendar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrair link do Meet do evento criado\nconst evento = $input.first().json;\nconst dadosReuniao = $('Processar Confirmação').first().json;\n\nconst linkMeet = evento.hangoutLink || evento.conferenceData?.entryPoints?.[0]?.uri || 'Link será enviado por email';\nconst eventId = evento.id || '';\n\n// Formatar data e hora para exibição\nconst dataObj = new Date(dadosReuniao.dataHoraInicio);\nconst dataFormatada = dataObj.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });\nconst horaFormatada = dadosReuniao.horaReuniao;\n\nreturn [{\n  json: {\n    ...dadosReuniao,\n    linkMeet,\n    eventId,\n    dataFormatada,\n    horaFormatada\n  }\n}];"
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000013",
+      "name": "Extrair Link Meet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 750]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO reunioes (lead_id, data_hora, status, link_meet, observacoes) VALUES ({{ $json.leadId }}, '{{ $json.dataHoraInicio }}', 'agendada', '{{ $json.linkMeet }}', 'Agendada automaticamente'); UPDATE leads SET status = 'REUNIAO_AGENDADA' WHERE id = {{ $json.leadId }};",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000014",
+      "name": "Salvar Reunião no Banco",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1000, 750],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, text: '✅ Reunião confirmada!\\n\\n📅 Data: ' + $json.dataFormatada + '\\n⏰ Horário: ' + $json.horaFormatada + '\\n💻 Link: ' + $json.linkMeet + '\\n\\nVou te enviar um lembrete 1 hora antes. Até lá! 😊🚀' }) }}",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000015",
+      "name": "Confirmar para Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 650]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT valor FROM configuracoes WHERE chave = 'whatsapp_dono' LIMIT 1;",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000016",
+      "name": "Buscar WhatsApp Dono",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1250, 850],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/Buildesign",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "zapplia123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.valor, text: '📅 NOVA REUNIÃO AGENDADA!\\n\\n👤 Cliente: ' + $('Extrair Link Meet').first().json.nome + '\\n📱 WhatsApp: ' + $('Extrair Link Meet').first().json.whatsapp + '\\n📅 Data: ' + $('Extrair Link Meet').first().json.dataFormatada + '\\n⏰ Horário: ' + $('Extrair Link Meet').first().json.horaFormatada + '\\n💻 Link: ' + $('Extrair Link Meet').first().json.linkMeet + '\\n\\nEvento adicionado ao Google Calendar ✅' }) }}",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000017",
+      "name": "Notificar Dono",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 850]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversas (lead_id, mensagem, tipo, data_hora) VALUES ({{ $('Extrair Link Meet').first().json.leadId }}, 'Reunião confirmada para {{ $('Extrair Link Meet').first().json.dataFormatada }} às {{ $('Extrair Link Meet').first().json.horaFormatada }}. Link: {{ $('Extrair Link Meet').first().json.linkMeet }}', 'enviada', NOW());",
+        "options": {}
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000018",
+      "name": "Salvar Conversa Confirmação",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1500, 650],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credential",
+          "name": "Buildesign PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Agendamento": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extrair Dados Agendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Dados Agendamento": {
+      "main": [
+        [
+          {
+            "node": "Buscar Lead",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google Calendar - Eventos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Lead": {
+      "main": [
+        [
+          {
+            "node": "Calcular Horários Disponíveis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Eventos": {
+      "main": [
+        [
+          {
+            "node": "Calcular Horários Disponíveis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Horários Disponíveis": {
+      "main": [
+        [
+          {
+            "node": "Enviar Horários Disponíveis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Horários Disponíveis": {
+      "main": [
+        [
+          {
+            "node": "Salvar Envio Horários",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Confirmar Reunião": {
+      "main": [
+        [
+          {
+            "node": "Responder Confirmação",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Processar Confirmação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Confirmação": {
+      "main": [
+        [
+          {
+            "node": "Criar Evento Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Evento Google Calendar": {
+      "main": [
+        [
+          {
+            "node": "Extrair Link Meet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Link Meet": {
+      "main": [
+        [
+          {
+            "node": "Salvar Reunião no Banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar Reunião no Banco": {
+      "main": [
+        [
+          {
+            "node": "Confirmar para Cliente",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Buscar WhatsApp Dono",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Salvar Conversa Confirmação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar WhatsApp Dono": {
+      "main": [
+        [
+          {
+            "node": "Notificar Dono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "buildesign-agendamento-v1",
+  "meta": {
+    "instanceId": "buildesign"
+  },
+  "tags": [
+    {
+      "name": "Buildesign",
+      "id": "1"
+    }
+  ]
+}

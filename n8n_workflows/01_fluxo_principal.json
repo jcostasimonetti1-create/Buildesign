@@ -394,17 +394,6 @@
     },
     {
       "parameters": {
-        "batchSize": 1,
-        "options": {}
-      },
-      "id": "a1b2c3d4-0001-4000-8000-000000000030",
-      "name": "Loop de Mensagens",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [5250, 400]
-    },
-    {
-      "parameters": {
         "url": "https://evolution-api-production-6eb4.up.railway.app/chat/sendPresence/buildesign-teste",
         "sendHeaders": true,
         "headerParameters": {
@@ -602,17 +591,12 @@
         { "node": "Salvar Msg Recebida", "type": "main", "index": 0 },
         { "node": "Salvar Msg Enviada", "type": "main", "index": 0 },
         { "node": "Atualizar Lead", "type": "main", "index": 0 },
-        { "node": "Dividir em Partes", "type": "main", "index": 0 }
+        { "node": "Dividir em Partes", "type": "main", "index": 0 },
+        { "node": "Sugeriu Reunião?", "type": "main", "index": 0 }
       ]]
     },
     "Dividir em Partes": {
-      "main": [[{ "node": "Loop de Mensagens", "type": "main", "index": 0 }]]
-    },
-    "Loop de Mensagens": {
-      "main": [
-        [{ "node": "Simular Digitando", "type": "main", "index": 0 }],
-        [{ "node": "Sugeriu Reunião?", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Simular Digitando", "type": "main", "index": 0 }]]
     },
     "Simular Digitando": {
       "main": [[{ "node": "Aguardar 5s", "type": "main", "index": 0 }]]
@@ -621,7 +605,7 @@
       "main": [[{ "node": "Enviar Parte", "type": "main", "index": 0 }]]
     },
     "Enviar Parte": {
-      "main": [[{ "node": "Loop de Mensagens", "type": "main", "index": 0 }]]
+      "main": [[]]
     },
     "Sugeriu Reunião?": {
       "main": [

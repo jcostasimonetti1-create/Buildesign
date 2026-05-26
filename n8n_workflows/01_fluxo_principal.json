@@ -405,7 +405,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, options: { presence: 'composing', delay: 5000 } }) }}",
+        "jsonBody": "={{ { number: $json.whatsapp, options: { presence: 'composing', delay: 5000 } } }}",
         "options": { "timeout": 10000 }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000031",
@@ -441,7 +441,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, textMessage: { text: $json.parteMensagem } }) }}",
+        "jsonBody": "={{ { number: $json.whatsapp, textMessage: { text: $json.parteMensagem } } }}",
         "options": { "timeout": 30000 }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000025",
@@ -503,7 +503,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ number: $input.first().json.valor, textMessage: { text: '🔔 ALERTA LEAD QUENTE!\\n\\nNome: ' + ($('Processar Resposta GPT').first()?.json?.leadNome || '') + '\\nWhatsApp: ' + ($('Processar Resposta GPT').first()?.json?.whatsapp || '') + '\\nCategoria: ' + ($('Processar Resposta GPT').first()?.json?.categoria || '') + '\\nIntenção: ' + ($('Processar Resposta GPT').first()?.json?.intencao || '') + '\\nInteresses: ' + ($('Processar Resposta GPT').first()?.json?.interesses || '') + '\\n\\n💡 O lead demonstrou interesse em agendar reunião!' } }) }}",
+        "jsonBody": "={{ { number: $input.first().json.valor, textMessage: { text: '🔔 ALERTA LEAD QUENTE!\\n\\nNome: ' + ($('Processar Resposta GPT').first()?.json?.leadNome || '') + '\\nWhatsApp: ' + ($('Processar Resposta GPT').first()?.json?.whatsapp || '') + '\\nCategoria: ' + ($('Processar Resposta GPT').first()?.json?.categoria || '') + '\\nIntenção: ' + ($('Processar Resposta GPT').first()?.json?.intencao || '') + '\\nInteresses: ' + ($('Processar Resposta GPT').first()?.json?.interesses || '') + '\\n\\n💡 O lead demonstrou interesse em agendar reunião!' } } }}",
         "options": { "timeout": 30000 }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000028",

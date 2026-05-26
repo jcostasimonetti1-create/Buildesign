@@ -99,7 +99,8 @@
       "name": "Baixar Áudio Evolution",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 600]
+      "position": [1000, 600],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -112,6 +113,7 @@
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [1250, 600],
+      "continueOnFail": true,
       "credentials": {
         "openAiApi": { "id": "openai-credential", "name": "OpenAI account" }
       }
@@ -157,11 +159,12 @@
       "name": "PageSpeed Insights",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2000, 300]
+      "position": [2000, 300],
+      "continueOnFail": true
     },
     {
       "parameters": {
-        "jsCode": "const pageSpeed = $input.first().json;\nconst original = $('Unificar Mensagem').first().json;\n\nlet analise = '';\n\ntry {\n  const cats = pageSpeed.lighthouseResult?.categories || {};\n  const perf = Math.round((cats.performance?.score || 0) * 100);\n  const access = Math.round((cats.accessibility?.score || 0) * 100);\n  const bp = Math.round((cats['best-practices']?.score || 0) * 100);\n  const seo = Math.round((cats.seo?.score || 0) * 100);\n\n  const audits = pageSpeed.lighthouseResult?.audits || {};\n  const fcp = audits['first-contentful-paint']?.displayValue || 'N/A';\n  const lcp = audits['largest-contentful-paint']?.displayValue || 'N/A';\n  const cls = audits['cumulative-layout-shift']?.displayValue || 'N/A';\n  const speed = audits['speed-index']?.displayValue || 'N/A';\n  const mobile = audits['viewport']?.score === 1 ? 'Sim' : 'Não';\n\n  analise = `\\n📊 ANÁLISE DO SITE: ${original.extractedUrl}\\n`;\n  analise += `\\n🏆 PONTUAÇÕES GOOGLE PAGESPEED (Mobile):\\n`;\n  analise += `• Performance: ${perf}/100\\n`;\n  analise += `• Acessibilidade: ${access}/100\\n`;\n  analise += `• Boas Práticas: ${bp}/100\\n`;\n  analise += `• SEO: ${seo}/100\\n`;\n  analise += `\\n⚡ MÉTRICAS DE VELOCIDADE:\\n`;\n  analise += `• First Contentful Paint: ${fcp}\\n`;\n  analise += `• Largest Contentful Paint: ${lcp}\\n`;\n  analise += `• Cumulative Layout Shift: ${cls}\\n`;\n  analise += `• Speed Index: ${speed}\\n`;\n  analise += `• Responsivo (Mobile): ${mobile}\\n`;\n\n  const problems = [];\n  if (perf < 50) problems.push('Performance muito baixa');\n  if (perf >= 50 && perf < 80) problems.push('Performance pode melhorar');\n  if (access < 80) problems.push('Acessibilidade precisa de atenção');\n  if (seo < 80) problems.push('SEO precisa ser otimizado');\n  if (bp < 80) problems.push('Boas práticas não seguidas');\n  if (mobile === 'Não') problems.push('Site NÃO é responsivo');\n\n  if (problems.length > 0) {\n    analise += `\\n⚠️ PROBLEMAS IDENTIFICADOS:\\n`;\n    problems.forEach(p => analise += `• ${p}\\n`);\n  }\n} catch(e) {\n  analise = `Não foi possível analisar o site ${original.extractedUrl}. Erro: ${e.message}`;\n}\n\nreturn [{\n  json: {\n    ...original,\n    analiseSite: analise,\n    temAnaliseSite: true\n  }\n}];"
+        "jsCode": "const pageSpeed = $input.first()?.json || {};\nconst original = $('Unificar Mensagem').first()?.json || {};\n\nlet analise = '';\n\ntry {\n  const cats = pageSpeed.lighthouseResult?.categories || {};\n  const perf = Math.round((cats.performance?.score || 0) * 100);\n  const access = Math.round((cats.accessibility?.score || 0) * 100);\n  const bp = Math.round((cats['best-practices']?.score || 0) * 100);\n  const seo = Math.round((cats.seo?.score || 0) * 100);\n\n  const audits = pageSpeed.lighthouseResult?.audits || {};\n  const fcp = audits['first-contentful-paint']?.displayValue || 'N/A';\n  const lcp = audits['largest-contentful-paint']?.displayValue || 'N/A';\n  const cls = audits['cumulative-layout-shift']?.displayValue || 'N/A';\n  const speed = audits['speed-index']?.displayValue || 'N/A';\n  const mobile = audits['viewport']?.score === 1 ? 'Sim' : 'Não';\n\n  analise = `\\n📊 ANÁLISE DO SITE: ${original.extractedUrl || ''}\\n`;\n  analise += `\\n🏆 PONTUAÇÕES GOOGLE PAGESPEED (Mobile):\\n`;\n  analise += `• Performance: ${perf}/100\\n`;\n  analise += `• Acessibilidade: ${access}/100\\n`;\n  analise += `• Boas Práticas: ${bp}/100\\n`;\n  analise += `• SEO: ${seo}/100\\n`;\n  analise += `\\n⚡ MÉTRICAS DE VELOCIDADE:\\n`;\n  analise += `• First Contentful Paint: ${fcp}\\n`;\n  analise += `• Largest Contentful Paint: ${lcp}\\n`;\n  analise += `• Cumulative Layout Shift: ${cls}\\n`;\n  analise += `• Speed Index: ${speed}\\n`;\n  analise += `• Responsivo (Mobile): ${mobile}\\n`;\n\n  const problems = [];\n  if (perf < 50) problems.push('Performance muito baixa');\n  if (perf >= 50 && perf < 80) problems.push('Performance pode melhorar');\n  if (access < 80) problems.push('Acessibilidade precisa de atenção');\n  if (seo < 80) problems.push('SEO precisa ser otimizado');\n  if (bp < 80) problems.push('Boas práticas não seguidas');\n  if (mobile === 'Não') problems.push('Site NÃO é responsivo');\n\n  if (problems.length > 0) {\n    analise += `\\n⚠️ PROBLEMAS IDENTIFICADOS:\\n`;\n    problems.forEach(p => analise += `• ${p}\\n`);\n  }\n} catch(e) {\n  analise = `Não foi possível analisar o site. Erro: ${e.message}`;\n}\n\nreturn [{\n  json: {\n    ...original,\n    analiseSite: analise,\n    temAnaliseSite: true\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000011",
       "name": "Processar PageSpeed",
@@ -171,7 +174,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Predecessor é 'Tem URL?' (false branch) que passa os dados de Unificar Mensagem adiante\nconst original = $input.first().json;\nreturn [{\n  json: {\n    ...original,\n    analiseSite: '',\n    temAnaliseSite: false\n  }\n}];"
+        "jsCode": "// Predecessor é 'Tem URL?' (false branch) que passa os dados de Unificar Mensagem adiante\nconst original = $input.first()?.json || {};\nreturn [{\n  json: {\n    ...original,\n    analiseSite: '',\n    temAnaliseSite: false\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000012",
       "name": "Sem Análise de Site",
@@ -243,13 +246,15 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [3250, 550],
+      "continueOnFail": true,
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": { "id": "postgres-credential", "name": "Buildesign PostgreSQL" }
       }
     },
     {
       "parameters": {
-        "jsCode": "// Vindo de 'Lead Existe?' true → $input = output de Verificar Lead (tem leadId e msgData)\n// Vindo de 'Criar Lead' → $input = linha inserida com RETURNING * (tem 'id', perde msgData)\n// Usar Extrair Dados da Mensagem garante que whatsapp, pushName, messageContent etc. sempre existem\nconst msgData = $('Extrair Dados da Mensagem').first()?.json || {};\nconst inputData = $input.first().json;\nconst leadId = inputData.id ?? inputData.leadId ?? null;\n\nreturn [{\n  json: {\n    ...msgData,\n    ...inputData,\n    leadId\n  }\n}];"
+        "jsCode": "// Vindo de 'Lead Existe?' true → $input = output de Verificar Lead (tem leadId e msgData)\n// Vindo de 'Criar Lead' → $input = linha inserida com RETURNING * (tem 'id', perde msgData)\n// Usar Extrair Dados da Mensagem garante que whatsapp, pushName, messageContent etc. sempre existem\nconst msgData = $('Extrair Dados da Mensagem').first()?.json || {};\nconst inputData = $input.first()?.json || {};\nconst leadId = inputData.id ?? inputData.leadId ?? null;\n\nreturn [{\n  json: {\n    ...msgData,\n    ...inputData,\n    leadId\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000017",
       "name": "Definir Lead ID",
@@ -270,13 +275,15 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [3750, 400],
+      "continueOnFail": true,
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": { "id": "postgres-credential", "name": "Buildesign PostgreSQL" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const msgData = $('Definir Lead ID').first().json;\nconst historicoRows = $input.all().map(i => i.json);\n\nlet historicoFormatado = '';\nif (historicoRows && historicoRows.length > 0 && historicoRows[0].mensagem) {\n  const reversed = [...historicoRows].reverse();\n  historicoFormatado = reversed.map(h => {\n    const tipo = h.tipo === 'recebida' ? '👤 Cliente' : '🤖 Gustavo';\n    const data = new Date(h.data_hora).toLocaleString('pt-BR');\n    let msg = h.mensagem || '';\n    if (h.transcricao_audio) msg += ` [Áudio transcrito: ${h.transcricao_audio}]`;\n    return `${tipo} (${data}): ${msg}`;\n  }).join('\\n');\n} else {\n  historicoFormatado = 'Primeira interação - sem histórico anterior.';\n}\n\nlet mensagemAtual = msgData.messageContent || '';\nif (msgData.transcricaoAudio) {\n  mensagemAtual = `[Áudio transcrito]: ${msgData.transcricaoAudio}`;\n}\n\nlet contextSite = '';\nif (msgData.temAnaliseSite && msgData.analiseSite) {\n  contextSite = `\\n\\n--- ANÁLISE AUTOMÁTICA DO SITE DO CLIENTE ---\\n${msgData.analiseSite}\\n--- FIM DA ANÁLISE ---`;\n}\n\nreturn [{\n  json: {\n    ...msgData,\n    historicoFormatado,\n    mensagemAtual,\n    contextSite,\n    promptContext: `\nINFORMAÇÕES DO LEAD:\n- Nome: ${msgData.leadNome || msgData.pushName || 'Desconhecido'}\n- WhatsApp: ${msgData.whatsapp}\n- Status atual: ${msgData.leadStatus || 'novo'}\n- Categoria: ${msgData.leadCategoria || 'Não classificado'}\n- Interesses: ${msgData.leadInteresses || 'Não identificados'}\n- Resumo do histórico: ${msgData.leadHistoricoResumo || 'Sem resumo anterior'}\n\nHISTÓRICO DAS ÚLTIMAS CONVERSAS:\n${historicoFormatado}\n\nMENSAGEM ATUAL DO CLIENTE:\n${mensagemAtual}\n${contextSite}`\n  }\n}];"
+        "jsCode": "const msgData = $('Definir Lead ID').first()?.json || {};\nconst historicoRows = $input.all().map(i => i.json).filter(h => h && h.mensagem);\n\nlet historicoFormatado = '';\nif (historicoRows.length > 0) {\n  const reversed = [...historicoRows].reverse();\n  historicoFormatado = reversed.map(h => {\n    const tipo = h.tipo === 'recebida' ? '👤 Cliente' : '🤖 Gustavo';\n    let dataStr = '';\n    try { dataStr = new Date(h.data_hora).toLocaleString('pt-BR'); } catch(e) { dataStr = ''; }\n    let msg = h.mensagem || '';\n    if (h.transcricao_audio) msg += ` [Áudio transcrito: ${h.transcricao_audio}]`;\n    return `${tipo} (${dataStr}): ${msg}`;\n  }).join('\\n');\n} else {\n  historicoFormatado = 'Primeira interação - sem histórico anterior.';\n}\n\nlet mensagemAtual = msgData.messageContent || '';\nif (msgData.transcricaoAudio) {\n  mensagemAtual = `[Áudio transcrito]: ${msgData.transcricaoAudio}`;\n}\n\nlet contextSite = '';\nif (msgData.temAnaliseSite && msgData.analiseSite) {\n  contextSite = `\\n\\n--- ANÁLISE AUTOMÁTICA DO SITE DO CLIENTE ---\\n${msgData.analiseSite}\\n--- FIM DA ANÁLISE ---`;\n}\n\nreturn [{\n  json: {\n    ...msgData,\n    historicoFormatado,\n    mensagemAtual,\n    contextSite,\n    promptContext: `\nINFORMAÇÕES DO LEAD:\n- Nome: ${msgData.leadNome || msgData.pushName || 'Desconhecido'}\n- WhatsApp: ${msgData.whatsapp || ''}\n- Status atual: ${msgData.leadStatus || 'novo'}\n- Categoria: ${msgData.leadCategoria || 'Não classificado'}\n- Interesses: ${msgData.leadInteresses || 'Não identificados'}\n- Resumo do histórico: ${msgData.leadHistoricoResumo || 'Sem resumo anterior'}\n\nHISTÓRICO DAS ÚLTIMAS CONVERSAS:\n${historicoFormatado}\n\nMENSAGEM ATUAL DO CLIENTE:\n${mensagemAtual}\n${contextSite}`\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000019",
       "name": "Montar Contexto GPT",
@@ -303,13 +310,14 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [4250, 400],
+      "continueOnFail": true,
       "credentials": {
         "openAiApi": { "id": "openai-credential", "name": "OpenAI account" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const gptResponse = $input.first().json;\n// Montar Contexto GPT tem todos os dados acumulados do pipeline\nconst msgData = $('Montar Contexto GPT').first()?.json || {};\n\nlet resposta = '';\nlet categoria = 'MORNO';\nlet interesses = '';\nlet resumo = '';\nlet sugerirReuniao = false;\nlet intencao = '';\n\ntry {\n  // Null-safe: garante que choices[0] existe antes de acessar\n  const content = gptResponse?.choices?.[0]?.message?.content?.trim() || '';\n  if (!content) throw new Error('GPT retornou resposta vazia');\n\n  let parsed;\n  try {\n    parsed = JSON.parse(content);\n  } catch(e) {\n    const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      parsed = JSON.parse(jsonMatch[0]);\n    } else {\n      parsed = { resposta: content };\n    }\n  }\n\n  resposta = parsed.resposta || content;\n  categoria = parsed.categoria || 'MORNO';\n  interesses = parsed.interesses || '';\n  resumo = parsed.resumo || '';\n  sugerirReuniao = parsed.sugerir_reuniao || false;\n  intencao = parsed.intencao || '';\n} catch(e) {\n  resposta = 'Oi! Tudo bem? 😊 Sou o Gustavo da BuilDesign. Como posso te ajudar?';\n}\n\nreturn [{\n  json: {\n    ...msgData,\n    respostaGPT: resposta,\n    categoria,\n    interesses,\n    resumo,\n    sugerirReuniao,\n    intencao\n  }\n}];"
+        "jsCode": "const gptResponse = $input.first()?.json || {};\n// Montar Contexto GPT tem todos os dados acumulados do pipeline\nconst msgData = $('Montar Contexto GPT').first()?.json || {};\n\nlet resposta = '';\nlet categoria = 'MORNO';\nlet interesses = '';\nlet resumo = '';\nlet sugerirReuniao = false;\nlet intencao = '';\n\ntry {\n  // Null-safe: garante que choices[0] existe antes de acessar\n  const content = gptResponse?.choices?.[0]?.message?.content?.trim() || '';\n  if (!content) throw new Error('GPT retornou resposta vazia');\n\n  let parsed;\n  try {\n    parsed = JSON.parse(content);\n  } catch(e) {\n    const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      parsed = JSON.parse(jsonMatch[0]);\n    } else {\n      parsed = { resposta: content };\n    }\n  }\n\n  resposta = parsed.resposta || content;\n  categoria = parsed.categoria || 'MORNO';\n  interesses = parsed.interesses || '';\n  resumo = parsed.resumo || '';\n  sugerirReuniao = parsed.sugerir_reuniao || false;\n  intencao = parsed.intencao || '';\n} catch(e) {\n  resposta = 'Oi! Tudo bem? 😊 Sou o Gustavo da BuilDesign. Como posso te ajudar?';\n}\n\nreturn [{\n  json: {\n    ...msgData,\n    respostaGPT: resposta,\n    categoria,\n    interesses,\n    resumo,\n    sugerirReuniao,\n    intencao\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000021",
       "name": "Processar Resposta GPT",
@@ -330,6 +338,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [4750, 200],
+      "continueOnFail": true,
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": { "id": "postgres-credential", "name": "Buildesign PostgreSQL" }
       }
@@ -347,6 +357,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [4750, 400],
+      "continueOnFail": true,
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": { "id": "postgres-credential", "name": "Buildesign PostgreSQL" }
       }
@@ -364,13 +376,15 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [4750, 600],
+      "continueOnFail": true,
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": { "id": "postgres-credential", "name": "Buildesign PostgreSQL" }
       }
     },
     {
       "parameters": {
-        "jsCode": "// Dividir resposta em múltiplas mensagens curtas\n// Separar por \\n\\n primeiro, depois \\n, depois por ponto final se necessário\nconst dados = $input.first().json;\nconst resposta = dados.respostaGPT || '';\n\nlet partes = resposta.split(/\\n\\n+/).filter(p => p.trim().length > 0);\n\n// Se só veio 1 parte, tentar dividir por \\n\nif (partes.length <= 1) {\n  partes = resposta.split(/\\n/).filter(p => p.trim().length > 0);\n}\n\n// Se ainda 1 parte longa (>200 chars), dividir por ponto final\nif (partes.length <= 1 && resposta.length > 200) {\n  const sentencas = resposta.match(/[^.!?]+[.!?]+/g) || [resposta];\n  partes = sentencas.filter(p => p.trim().length > 0);\n}\n\n// Garantir pelo menos 1 parte\nif (partes.length === 0) {\n  partes = [resposta];\n}\n\n// Retornar um item por parte mantendo todos os dados\nreturn partes.map(parte => ({\n  json: {\n    ...dados,\n    parteMensagem: parte.trim()\n  }\n}));"
+        "jsCode": "const dados = $input.first()?.json || {};\nconst resposta = dados.respostaGPT || '';\n\nlet partes = resposta.split(/\\n\\n+/).filter(p => p.trim().length > 0);\n\nif (partes.length <= 1) {\n  partes = resposta.split(/\\n/).filter(p => p.trim().length > 0);\n}\n\nif (partes.length <= 1 && resposta.length > 200) {\n  const sentencas = resposta.match(/[^.!?]+[.!?]+/g) || [resposta];\n  partes = sentencas.filter(p => p.trim().length > 0);\n}\n\nif (partes.length === 0) {\n  partes = [resposta || 'Olá! Como posso te ajudar?'];\n}\n\nreturn partes.map(parte => ({\n  json: {\n    ...dados,\n    parteMensagem: parte.trim()\n  }\n}));"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000029",
       "name": "Dividir em Partes",
@@ -408,7 +422,8 @@
       "name": "Simular Digitando",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [5500, 400]
+      "position": [5500, 400],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -442,7 +457,8 @@
       "name": "Enviar Parte",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [6000, 400]
+      "position": [6000, 400],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -477,6 +493,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [6500, 200],
+      "continueOnFail": true,
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": { "id": "postgres-credential", "name": "Buildesign PostgreSQL" }
       }
@@ -494,13 +512,14 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ number: $input.first().json.valor, text: '🔔 ALERTA LEAD QUENTE!\\n\\nNome: ' + ($('Processar Resposta GPT').first()?.json?.leadNome || '') + '\\nWhatsApp: ' + ($('Processar Resposta GPT').first()?.json?.whatsapp || '') + '\\nCategoria: ' + ($('Processar Resposta GPT').first()?.json?.categoria || '') + '\\nIntenção: ' + ($('Processar Resposta GPT').first()?.json?.intencao || '') + '\\nInteresses: ' + ($('Processar Resposta GPT').first()?.json?.interesses || '') + '\\n\\n💡 O lead demonstrou interesse em agendar reunião!' }) }}",
-        "options": {}
+        "options": { "timeout": 30000 }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000028",
       "name": "Notificar Dono Lead Quente",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [6750, 200]
+      "position": [6750, 200],
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -620,7 +639,7 @@
     "saveManualExecutions": true,
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "buildesign-principal-v3",
+  "versionId": "buildesign-principal-v4",
   "meta": { "instanceId": "buildesign" },
   "tags": [{ "name": "Buildesign", "id": "1" }]
 }

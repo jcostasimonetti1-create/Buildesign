@@ -404,8 +404,14 @@
           ]
         },
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { number: $json.whatsapp, options: { presence: 'composing', delay: 5000 } } }}",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "number", "value": "={{ $json.whatsapp }}" },
+            { "name": "options.presence", "value": "composing" },
+            { "name": "options.delay", "value": "=5000" }
+          ]
+        },
         "options": { "timeout": 10000 }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000031",
@@ -440,8 +446,13 @@
           ]
         },
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { number: $json.whatsapp, textMessage: { text: $json.parteMensagem } } }}",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "number", "value": "={{ $json.whatsapp }}" },
+            { "name": "textMessage.text", "value": "={{ $json.parteMensagem }}" }
+          ]
+        },
         "options": { "timeout": 30000 }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000025",

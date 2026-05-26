@@ -192,13 +192,15 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [2500, 400],
+      "continueOnFail": true,
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": { "id": "postgres-credential", "name": "Buildesign PostgreSQL" }
       }
     },
     {
       "parameters": {
-        "jsCode": "// Pega os dados da mensagem do nó anterior ao Buscar Lead\nconst msgData = $('Processar PageSpeed').first()?.json\n  || $('Sem Análise de Site').first()?.json\n  || {};\n\n// Lida corretamente com array vazio (lead não encontrado)\nconst allLeads = $input.all();\nconst leadExists = allLeads.length > 0\n  && allLeads[0].json != null\n  && allLeads[0].json.id != null;\nconst leadRow = leadExists ? allLeads[0].json : null;\n\nreturn [{\n  json: {\n    ...msgData,\n    leadExists,\n    leadId: leadRow?.id ?? null,\n    leadNome: leadRow?.nome ?? msgData?.pushName ?? '',\n    leadStatus: leadRow?.status ?? 'novo',\n    leadCategoria: leadRow?.categoria ?? null,\n    leadInteresses: leadRow?.interesses ?? null,\n    leadHistoricoResumo: leadRow?.historico_resumo ?? null\n  }\n}];"
+        "jsCode": "// Pega os dados da mensagem do nó anterior ao Buscar Lead\nconst msgData = $('Processar PageSpeed').first()?.json\n  || $('Sem Análise de Site').first()?.json\n  || {};\n\n// Lida com: array vazio, continueOnFail (objeto {error}), ou resultado real\nconst allLeads = $input.all();\nconst leadExists = allLeads.length > 0\n  && allLeads[0].json != null\n  && allLeads[0].json.id != null\n  && !allLeads[0].json.error;\nconst leadRow = leadExists ? allLeads[0].json : null;\n\nreturn [{\n  json: {\n    ...msgData,\n    leadExists,\n    leadId: leadRow?.id ?? null,\n    leadNome: leadRow?.nome ?? msgData?.pushName ?? '',\n    leadStatus: leadRow?.status ?? 'novo',\n    leadCategoria: leadRow?.categoria ?? null,\n    leadInteresses: leadRow?.interesses ?? null,\n    leadHistoricoResumo: leadRow?.historico_resumo ?? null\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000014",
       "name": "Verificar Lead",

@@ -184,7 +184,7 @@
         "operation": "executeQuery",
         "query": "SELECT * FROM leads WHERE whatsapp = $1 LIMIT 1",
         "options": {
-          "queryReplacement": "={{ $json.whatsapp }}"
+          "queryReplacement": "={{ [$json.whatsapp] }}"
         }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000013",
@@ -235,7 +235,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO leads (nome, whatsapp, status, data_cadastro) VALUES ($1, $2, 'novo', NOW()) RETURNING *",
         "options": {
-          "queryReplacement": "={{ $json.pushName }},={{ $json.whatsapp }}"
+          "queryReplacement": "={{ [$json.pushName, $json.whatsapp] }}"
         }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000016",
@@ -262,7 +262,7 @@
         "operation": "executeQuery",
         "query": "SELECT c.mensagem, c.tipo, c.data_hora, c.transcricao_audio FROM conversas c WHERE c.lead_id = $1 ORDER BY c.data_hora DESC LIMIT 10",
         "options": {
-          "queryReplacement": "={{ $json.leadId }}"
+          "queryReplacement": "={{ [$json.leadId] }}"
         }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000018",
@@ -322,7 +322,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO conversas (lead_id, mensagem, tipo, data_hora, transcricao_audio) VALUES ($1, $2, 'recebida', NOW(), $3)",
         "options": {
-          "queryReplacement": "={{ $json.leadId }},={{ $json.messageContent }},={{ $json.transcricaoAudio || null }}"
+          "queryReplacement": "={{ [$json.leadId, $json.messageContent, $json.transcricaoAudio || null] }}"
         }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000022",
@@ -339,7 +339,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO conversas (lead_id, mensagem, tipo, data_hora) VALUES ($1, $2, 'enviada', NOW())",
         "options": {
-          "queryReplacement": "={{ $json.leadId }},={{ $json.respostaGPT }}"
+          "queryReplacement": "={{ [$json.leadId, $json.respostaGPT] }}"
         }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000023",
@@ -356,7 +356,7 @@
         "operation": "executeQuery",
         "query": "UPDATE leads SET status = $1, categoria = $1, data_ultimo_contato = NOW(), data_followup_3dias = NOW() + INTERVAL '3 days', data_followup_5dias = NOW() + INTERVAL '5 days', interesses = $2, historico_resumo = $3, nome = COALESCE(NULLIF($4, ''), nome) WHERE id = $5",
         "options": {
-          "queryReplacement": "={{ $json.categoria }},={{ $json.interesses || '' }},={{ $json.resumo || '' }},={{ $json.pushName || '' }},={{ $json.leadId }}"
+          "queryReplacement": "={{ [$json.categoria, $json.interesses || '', $json.resumo || '', $json.pushName || '', $json.leadId] }}"
         }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000024",

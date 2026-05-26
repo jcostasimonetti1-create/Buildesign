@@ -118,7 +118,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst item = items[0].json;\n\nlet messageContent = '';\nlet transcricaoAudio = null;\n\nif (item.text) {\n  messageContent = item.text;\n  transcricaoAudio = item.text;\n} else {\n  messageContent = item.messageContent || '';\n  transcricaoAudio = null;\n}\n\nconst originalData = $('Extrair Dados da Mensagem').first().json;\n\nreturn [{\n  json: {\n    ...originalData,\n    messageContent: messageContent || originalData.messageContent,\n    transcricaoAudio,\n    processedAt: new Date().toISOString()\n  }\n}];"
+        "jsCode": "// O predecessor (É Texto?, É Áudio? false, ou Whisper) sempre passa os dados da mensagem\nconst items = $input.all();\nconst item = items[0]?.json || {};\n\nlet messageContent = '';\nlet transcricaoAudio = null;\n\nif (item.text) {\n  // Vindo do Whisper: 'text' é a transcrição do áudio\n  messageContent = item.text;\n  transcricaoAudio = item.text;\n} else {\n  messageContent = item.messageContent || '';\n}\n\nreturn [{\n  json: {\n    ...item,\n    messageContent: messageContent || item.messageContent || '',\n    transcricaoAudio,\n    processedAt: new Date().toISOString()\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000008",
       "name": "Unificar Mensagem",
@@ -171,7 +171,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const original = $('Unificar Mensagem').first().json;\nreturn [{\n  json: {\n    ...original,\n    analiseSite: '',\n    temAnaliseSite: false\n  }\n}];"
+        "jsCode": "// Predecessor é 'Tem URL?' (false branch) que passa os dados de Unificar Mensagem adiante\nconst original = $input.first().json;\nreturn [{\n  json: {\n    ...original,\n    analiseSite: '',\n    temAnaliseSite: false\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000012",
       "name": "Sem Análise de Site",
@@ -200,7 +200,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Pega os dados da mensagem do nó anterior ao Buscar Lead\nconst msgData = $('Processar PageSpeed').first()?.json\n  || $('Sem Análise de Site').first()?.json\n  || {};\n\n// Lida com: array vazio, continueOnFail (objeto {error}), ou resultado real\nconst allLeads = $input.all();\nconst leadExists = allLeads.length > 0\n  && allLeads[0].json != null\n  && allLeads[0].json.id != null\n  && !allLeads[0].json.error;\nconst leadRow = leadExists ? allLeads[0].json : null;\n\nreturn [{\n  json: {\n    ...msgData,\n    leadExists,\n    leadId: leadRow?.id ?? null,\n    leadNome: leadRow?.nome ?? msgData?.pushName ?? '',\n    leadStatus: leadRow?.status ?? 'novo',\n    leadCategoria: leadRow?.categoria ?? null,\n    leadInteresses: leadRow?.interesses ?? null,\n    leadHistoricoResumo: leadRow?.historico_resumo ?? null\n  }\n}];"
+        "jsCode": "// Buscar Lead tem alwaysOutputData:true e continueOnFail:true\n// - Lead encontrado: $input tem a linha do banco {id, nome, whatsapp, status, ...}\n// - Lead não encontrado: $input tem o item de entrada passado adiante (dados da mensagem)\n// - Erro: $input tem {error: ...}\nconst allItems = $input.all();\nconst firstItem = allItems.length > 0 ? allItems[0].json : {};\n\nconst hasError = !!firstItem.error;\nconst leadExists = !hasError && firstItem.id != null;\nconst leadRow = leadExists ? firstItem : null;\n\n// baseData é a linha do banco (lead encontrado) ou dados da mensagem (não encontrado)\nconst baseData = firstItem;\n\nreturn [{\n  json: {\n    ...baseData,\n    leadExists,\n    leadId: leadRow?.id ?? null,\n    leadNome: leadRow?.nome ?? baseData.pushName ?? '',\n    leadStatus: leadRow?.status ?? 'novo',\n    leadCategoria: leadRow?.categoria ?? null,\n    leadInteresses: leadRow?.interesses ?? null,\n    leadHistoricoResumo: leadRow?.historico_resumo ?? null\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000014",
       "name": "Verificar Lead",
@@ -249,7 +249,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const prevData = $('Verificar Lead').first().json;\nlet leadId;\n\ntry {\n  leadId = $('Criar Lead').first().json.id;\n} catch(e) {\n  leadId = prevData.leadId;\n}\n\nreturn [{\n  json: {\n    ...prevData,\n    leadId: leadId || prevData.leadId\n  }\n}];"
+        "jsCode": "// Vindo de 'Lead Existe?' true → $input = output de Verificar Lead (tem leadId)\n// Vindo de 'Criar Lead' → $input = linha inserida com RETURNING * (tem 'id')\nconst inputData = $input.first().json;\nconst leadId = inputData.id ?? inputData.leadId ?? null;\n\nreturn [{\n  json: {\n    ...inputData,\n    leadId\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000017",
       "name": "Definir Lead ID",
@@ -309,7 +309,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const gptResponse = $input.first().json;\nconst msgData = $('Montar Contexto GPT').first().json;\n\nlet resposta = '';\nlet categoria = 'MORNO';\nlet interesses = '';\nlet resumo = '';\nlet sugerirReuniao = false;\nlet intencao = '';\n\ntry {\n  const content = gptResponse.choices[0].message.content.trim();\n  \n  let parsed;\n  try {\n    parsed = JSON.parse(content);\n  } catch(e) {\n    const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      parsed = JSON.parse(jsonMatch[0]);\n    } else {\n      parsed = { resposta: content };\n    }\n  }\n  \n  resposta = parsed.resposta || content;\n  categoria = parsed.categoria || 'MORNO';\n  interesses = parsed.interesses || '';\n  resumo = parsed.resumo || '';\n  sugerirReuniao = parsed.sugerir_reuniao || false;\n  intencao = parsed.intencao || '';\n} catch(e) {\n  resposta = 'Oi! Tudo bem? 😊 Sou o Gustavo da BuilDesign. Como posso te ajudar?';\n}\n\nreturn [{\n  json: {\n    ...msgData,\n    respostaGPT: resposta,\n    categoria,\n    interesses,\n    resumo,\n    sugerirReuniao,\n    intencao\n  }\n}];"
+        "jsCode": "const gptResponse = $input.first().json;\n// Montar Contexto GPT tem todos os dados acumulados do pipeline\nconst msgData = $('Montar Contexto GPT').first()?.json || {};\n\nlet resposta = '';\nlet categoria = 'MORNO';\nlet interesses = '';\nlet resumo = '';\nlet sugerirReuniao = false;\nlet intencao = '';\n\ntry {\n  // Null-safe: garante que choices[0] existe antes de acessar\n  const content = gptResponse?.choices?.[0]?.message?.content?.trim() || '';\n  if (!content) throw new Error('GPT retornou resposta vazia');\n\n  let parsed;\n  try {\n    parsed = JSON.parse(content);\n  } catch(e) {\n    const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      parsed = JSON.parse(jsonMatch[0]);\n    } else {\n      parsed = { resposta: content };\n    }\n  }\n\n  resposta = parsed.resposta || content;\n  categoria = parsed.categoria || 'MORNO';\n  interesses = parsed.interesses || '';\n  resumo = parsed.resumo || '';\n  sugerirReuniao = parsed.sugerir_reuniao || false;\n  intencao = parsed.intencao || '';\n} catch(e) {\n  resposta = 'Oi! Tudo bem? 😊 Sou o Gustavo da BuilDesign. Como posso te ajudar?';\n}\n\nreturn [{\n  json: {\n    ...msgData,\n    respostaGPT: resposta,\n    categoria,\n    interesses,\n    resumo,\n    sugerirReuniao,\n    intencao\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000021",
       "name": "Processar Resposta GPT",
@@ -493,7 +493,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ number: $('Buscar WhatsApp Dono').first().json.valor, text: '🔔 ALERTA LEAD QUENTE!\\n\\nNome: ' + $('Processar Resposta GPT').first().json.leadNome + '\\nWhatsApp: ' + $('Processar Resposta GPT').first().json.whatsapp + '\\nCategoria: ' + $('Processar Resposta GPT').first().json.categoria + '\\nIntenção: ' + $('Processar Resposta GPT').first().json.intencao + '\\nInteresses: ' + $('Processar Resposta GPT').first().json.interesses + '\\n\\n💡 O lead demonstrou interesse em agendar reunião!' }) }}",
+        "jsonBody": "={{ JSON.stringify({ number: $input.first().json.valor, text: '🔔 ALERTA LEAD QUENTE!\\n\\nNome: ' + ($('Processar Resposta GPT').first()?.json?.leadNome || '') + '\\nWhatsApp: ' + ($('Processar Resposta GPT').first()?.json?.whatsapp || '') + '\\nCategoria: ' + ($('Processar Resposta GPT').first()?.json?.categoria || '') + '\\nIntenção: ' + ($('Processar Resposta GPT').first()?.json?.intencao || '') + '\\nInteresses: ' + ($('Processar Resposta GPT').first()?.json?.interesses || '') + '\\n\\n💡 O lead demonstrou interesse em agendar reunião!' }) }}",
         "options": {}
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000028",

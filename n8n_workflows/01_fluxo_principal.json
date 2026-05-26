@@ -200,7 +200,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Buscar Lead tem alwaysOutputData:true e continueOnFail:true\n// - Lead encontrado: $input tem a linha do banco {id, nome, whatsapp, status, ...}\n// - Lead não encontrado: $input tem o item de entrada passado adiante (dados da mensagem)\n// - Erro: $input tem {error: ...}\nconst allItems = $input.all();\nconst firstItem = allItems.length > 0 ? allItems[0].json : {};\n\nconst hasError = !!firstItem.error;\nconst leadExists = !hasError && firstItem.id != null;\nconst leadRow = leadExists ? firstItem : null;\n\n// baseData é a linha do banco (lead encontrado) ou dados da mensagem (não encontrado)\nconst baseData = firstItem;\n\nreturn [{\n  json: {\n    ...baseData,\n    leadExists,\n    leadId: leadRow?.id ?? null,\n    leadNome: leadRow?.nome ?? baseData.pushName ?? '',\n    leadStatus: leadRow?.status ?? 'novo',\n    leadCategoria: leadRow?.categoria ?? null,\n    leadInteresses: leadRow?.interesses ?? null,\n    leadHistoricoResumo: leadRow?.historico_resumo ?? null\n  }\n}];"
+        "jsCode": "// 'Extrair Dados da Mensagem' sempre executa em todo caminho do fluxo\n// É a fonte confiável de whatsapp, pushName, messageContent etc.\nconst msgData = $('Extrair Dados da Mensagem').first()?.json || {};\n\n// Buscar Lead com alwaysOutputData:true e continueOnFail:true:\n// - Lead encontrado: $input tem a linha do banco {id, nome, whatsapp, status, ...}\n// - Lead não encontrado: $input tem {} (Postgres não passa o item de entrada)\n// - Erro: $input tem {error: ...}\nconst allItems = $input.all();\nconst firstItem = allItems.length > 0 ? allItems[0].json : {};\n\nconst hasError = !!firstItem.error;\nconst leadExists = !hasError && firstItem.id != null;\nconst leadRow = leadExists ? firstItem : null;\n\nreturn [{\n  json: {\n    ...msgData,\n    leadExists,\n    leadId: leadRow?.id ?? null,\n    leadNome: leadRow?.nome ?? msgData.pushName ?? '',\n    leadStatus: leadRow?.status ?? 'novo',\n    leadCategoria: leadRow?.categoria ?? null,\n    leadInteresses: leadRow?.interesses ?? null,\n    leadHistoricoResumo: leadRow?.historico_resumo ?? null\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000014",
       "name": "Verificar Lead",
@@ -235,7 +235,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO leads (nome, whatsapp, status, data_cadastro) VALUES ($1, $2, 'novo', NOW()) RETURNING *",
         "options": {
-          "queryReplacement": "={{ [$json.pushName, $json.whatsapp] }}"
+          "queryReplacement": "={{ [$json.pushName || $json.whatsapp || 'Cliente', $json.whatsapp] }}"
         }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000016",
@@ -249,7 +249,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Vindo de 'Lead Existe?' true → $input = output de Verificar Lead (tem leadId)\n// Vindo de 'Criar Lead' → $input = linha inserida com RETURNING * (tem 'id')\nconst inputData = $input.first().json;\nconst leadId = inputData.id ?? inputData.leadId ?? null;\n\nreturn [{\n  json: {\n    ...inputData,\n    leadId\n  }\n}];"
+        "jsCode": "// Vindo de 'Lead Existe?' true → $input = output de Verificar Lead (tem leadId e msgData)\n// Vindo de 'Criar Lead' → $input = linha inserida com RETURNING * (tem 'id', perde msgData)\n// Usar Extrair Dados da Mensagem garante que whatsapp, pushName, messageContent etc. sempre existem\nconst msgData = $('Extrair Dados da Mensagem').first()?.json || {};\nconst inputData = $input.first().json;\nconst leadId = inputData.id ?? inputData.leadId ?? null;\n\nreturn [{\n  json: {\n    ...msgData,\n    ...inputData,\n    leadId\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000017",
       "name": "Definir Lead ID",

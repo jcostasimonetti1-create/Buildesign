@@ -404,14 +404,8 @@
           ]
         },
         "sendBody": true,
-        "specifyBody": "keypair",
-        "bodyParameters": {
-          "parameters": [
-            { "name": "number", "value": "={{ $json.whatsapp }}" },
-            { "name": "options.presence", "value": "composing" },
-            { "name": "options.delay", "value": "=5000" }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, options: { presence: 'composing', delay: 5000 } }) }}",
         "options": { "timeout": 10000 }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000031",
@@ -436,6 +430,16 @@
     },
     {
       "parameters": {
+        "jsCode": "// Restaura os dados originais da parte a enviar.\n// Se Simular Digitando falhou (continueOnFail), $json pode ser { error: {...} }.\n// Busca os dados de Dividir em Partes usando o índice do item atual.\nconst idx = $itemIndex;\nconst partes = $('Dividir em Partes').all();\nconst parte = partes[idx] ? partes[idx].json : partes[0].json;\nreturn [{ json: parte }];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000033",
+      "name": "Restaurar Dados Parte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [6000, 400]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://evolution-api-production-6eb4.up.railway.app/message/sendText/buildesign-teste",
         "sendHeaders": true,
@@ -446,20 +450,15 @@
           ]
         },
         "sendBody": true,
-        "specifyBody": "keypair",
-        "bodyParameters": {
-          "parameters": [
-            { "name": "number", "value": "={{ $json.whatsapp }}" },
-            { "name": "textMessage.text", "value": "={{ $json.parteMensagem }}" }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.whatsapp, textMessage: { text: $json.parteMensagem } }) }}",
         "options": { "timeout": 30000 }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000025",
       "name": "Enviar Parte",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [6000, 400],
+      "position": [6250, 400],
       "continueOnFail": true
     },
     {
@@ -616,6 +615,9 @@
       "main": [[{ "node": "Aguardar 5s", "type": "main", "index": 0 }]]
     },
     "Aguardar 5s": {
+      "main": [[{ "node": "Restaurar Dados Parte", "type": "main", "index": 0 }]]
+    },
+    "Restaurar Dados Parte": {
       "main": [[{ "node": "Enviar Parte", "type": "main", "index": 0 }]]
     },
     "Enviar Parte": {
